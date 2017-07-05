@@ -1,0 +1,10 @@
+[otx]
+# AlienVault OTX API key
+otx_api_key = PUT API KEY HERE
+# AlienVault API URL
+otx_url = https://otx.alienvault.com/api/v1
+
+[proxy]
+# Leave blank if you do not use a proxy
+http =
+https =
