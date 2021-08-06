@@ -6,7 +6,7 @@
 # Create an account and curate your subscriptions
 # https://otx.alienvault.com
 #
-# AUTHOR Karma: https://github.com/KarmaIncarnate
+# Original AUTHOR Karma: https://github.com/KarmaIncarnate
 # Adapted from OTX 2 CRITS by lolnate @ https://github.com/lolnate/otx2crits
 # Using AlienVault SDK for OTXv2 https://github.com/AlienVault-OTX/OTX-Python-SDK
 
@@ -39,9 +39,6 @@ class OTX_Siphon(object):
                 proxy_https=self.config.get('proxy', 'https'),  # Set HTTPS proxy if present in config file,
             )
 
-        if dev:
-            print('Developer options not yet programmed.')  # Need to program developer parameters
-
         self.modified_since = None  # Set pulse range to those modified in last x days
         if days:
             print('Searching for pulses modified in last {}' ' days'.format(days))
@@ -73,9 +70,6 @@ class OTX_Siphon(object):
                     # and/or write methods. Need to parse the indicator_data
                     # Probably use some sort of mapping
                     result = [event_title, created, i['type'], i['indicator'], reference]
-                    # print('Indicator data: ' + str(indicator_data))
-                    # print('--------------------------------------')
-                    # print(result)
                     wr.writerow(result)
 
     def parse_config(self, location):
@@ -101,11 +95,6 @@ class OTX_Siphon(object):
             print('Config file found automatically')
             return self.parse_config(config_file)
         config_file = os.path.join(os.path.expanduser('~'), '.otx_config')  # Check path for .otx_config file
-        # Walk or?
-        # for root, dirs, files in os.walk(os.path.expanduser('~'))
-        #     for file in files:
-        #         if file.endswith(.otx_config):
-        #             return self.parse_config(config_file)
         return self.parse_config(config_file)
 
 
@@ -115,7 +104,6 @@ def main():
     argparser.add_argument(
         '-d', dest='days', default=None, type=int, help='Specify the max range of pulses grabbed ' 'in days. (days old)'
     )
-    argparser.add_argument('--dev', dest='dev', action='store_true', default=False, help='Use dev options.')
     args = argparser.parse_args()
 
     siphon = OTX_Siphon(dev=args.dev, config=args.config, days=args.days)
