@@ -31,6 +31,7 @@ class OTX_Siphon(object):
                 cache_dir=self.cache_dir,
                 proxy=self.config.get('proxy', 'http') or None,  # Set HTTP proxy if present in config file
                 proxy_https=self.config.get('proxy', 'https') or None,  # Set HTTPS proxy if present in config file,
+                max_age=365,  # don't populate the cache with pulses older than 365 days
             )
         else:
             self.otx = OTXv2(

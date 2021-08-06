@@ -1,8 +1,9 @@
 [otx]
 # AlienVault OTX API key
 otx_api_key = PUT API KEY HERE
-# AlienVault API URL
-otx_url = https://otx.alienvault.com/api/v1
+
+# Location of cache directory is cached method is desired.  if this setting is not set, cache will not be used
+cache_dir =
 
 [proxy]
 # Leave blank if you do not use a proxy
