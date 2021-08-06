@@ -13,63 +13,69 @@
 
 import argparse
 import os
-import requests
-import json
 import datetime
 import csv
 
 from configparser import ConfigParser
+from OTXv2 import OTXv2Cached, OTXv2
 
 
 class OTX_Siphon(object):
     def __init__(self, dev=False, config=None, days=None):
         self.config = self.load_config(config)  # Load configuration
 
-        self.otx_api_key = self.config.get('otx', 'otx_api_key')  # Set AlienVault API key
-        self.otx_url = self.config.get('otx', 'otx_url')  # Set AlienVault URL
-
-        self.proxies = {
-            'http': self.config.get('proxy', 'http'),  # Set HTTP proxy if present in config file
-            'https': self.config.get('proxy', 'https')  # Set HTTPS proxy if present in config file
-        }
+        self.cache_dir = self.config.get('otx', 'cache_dir', fallback=None)
+        if self.cache_dir:
+            self.otx = OTXv2Cached(
+                api_key=self.config.get('otx', 'otx_api_key'),
+                cache_dir=self.cache_dir,
+                proxy=self.config.get('proxy', 'http') or None,  # Set HTTP proxy if present in config file
+                proxy_https=self.config.get('proxy', 'https') or None,  # Set HTTPS proxy if present in config file,
+            )
+        else:
+            self.otx = OTXv2(
+                api_key=self.config.get('otx', 'otx_api_key'),
+                proxy=self.config.get('proxy', 'http'),  # Set HTTP proxy if present in config file
+                proxy_https=self.config.get('proxy', 'https'),  # Set HTTPS proxy if present in config file,
+            )
 
         if dev:
             print('Developer options not yet programmed.')  # Need to program developer parameters
 
         self.modified_since = None  # Set pulse range to those modified in last x days
         if days:
-            print('Searching for pulses modified in last {}'
-                  ' days'.format(days))
+            print('Searching for pulses modified in last {}' ' days'.format(days))
             self.modified_since = datetime.datetime.now() - datetime.timedelta(days=days)
 
     def execute(self):
-        for pulse in self.get_pulse_generator(modified_since=self.modified_since,
-                                              proxies=self.proxies):
-            print('Found pulse with id {} and title {}'.format(pulse['id'],
-                                                               pulse['name'].encode("utf-8")))
+        if self.cache_dir:
+            self.otx.update()
 
-            indicator_data = pulse['indicators']  # Pull indicators from pulse
-            event_title = pulse['name']  # Pull title from pulse
-            created = pulse['created']  # Pull date/time from pulse
-            reference = ''  # Pull reference from pulse if available
-            if not reference:
-                reference = 'No reference documented'
-            else:
-                reference = pulse['reference'][0]
+        with open("output.csv", 'w', newline='') as resultFile:
+            wr = csv.writer(resultFile, dialect='excel')
+            for pulse in self.otx.getall(modified_since=self.modified_since, iter=True, limit=20):
+                print('Found pulse with id {} and title {}'.format(pulse['id'], pulse['name'].encode("utf-8")))
 
-            print('Pulse name: ' + event_title)
-            print('Created: ' + created)
+                indicator_data = pulse['indicators']  # Pull indicators from pulse
+                event_title = pulse['name']  # Pull title from pulse
+                created = pulse['created']  # Pull date/time from pulse
+                reference = ''  # Pull reference from pulse if available
+                if not reference:
+                    reference = 'No reference documented'
+                else:
+                    reference = pulse['reference'][0]
 
-            with open("output.csv", 'w', newline='') as resultFile:
-                for i in pulse['indicators']:
+                print('Pulse name: ' + event_title)
+                print('Created: ' + created)
+
+                for i in indicator_data:
                     # Probably want to break this out so you can use add
                     # and/or write methods. Need to parse the indicator_data
                     # Probably use some sort of mapping
                     result = [event_title, created, i['type'], i['indicator'], reference]
-                    print('Indicator data: ' + str(indicator_data))
-                    print('--------------------------------------')
-                    print(result)
-                    wr = csv.writer(resultFile, dialect='excel')
+                    # print('Indicator data: ' + str(indicator_data))
+                    # print('--------------------------------------')
+                    # print(result)
                     wr.writerow(result)
 
     def parse_config(self, location):
@@ -86,7 +92,7 @@ class OTX_Siphon(object):
         return config
 
     def load_config(self, given_location=None):
-        """"Search for config and return parsed config file."""
+        """ "Search for config and return parsed config file."""
         if given_location:  # Check location provided by user
             print('Config found at given_location')
             return self.parse_config(given_location)
@@ -102,64 +108,14 @@ class OTX_Siphon(object):
         #             return self.parse_config(config_file)
         return self.parse_config(config_file)
 
-    def otx_get(self, url, proxies=None, verify=True):
-        """Build headers and issue a get request to AlienVault and return response data."""
-        headers = {
-            'X-OTX-API-KEY': self.otx_api_key,
-        }
-
-        r = requests.get(url, headers=headers, proxies=proxies, verify=verify)
-        if r.status_code == 200:
-            return r.text
-        else:
-            print('Error retrieving AlienVault OTX data.')
-            print('Status code was: {}'.format(r.status_code))
-            return False
-
-    def get_pulse_generator(self, modified_since=None,
-                            proxies=None, verify=True):
-        """Accept, loop/parse, and store pulse data.
-
-        # Yields pulse and its data while it can obtain more data(recursive).
-        # If no limit specified the API will only return 5 pulses total. (lol)
-        """
-
-        args = []
-
-        if modified_since:
-            args.append('modified_since={}'.format(
-                modified_since.strftime('%Y-%m-%d %H:%M:%S.%f')))
-
-        args.append('limit=10')
-        args.append('page=1')
-        request_args = '&'.join(args)
-        request_args = '?{}'.format(request_args)
-
-        response_data = self.otx_get('{}/pulses/subscribed{}'
-                                     .format(self.otx_url, request_args),
-                                     proxies=proxies, verify=verify)
-        while response_data:  # Loop through pulse data
-            all_pulses = json.loads(response_data)
-            if 'results' in all_pulses:
-                for pulse in all_pulses['results']:
-                    yield pulse
-            response_data = None
-            if 'next' in all_pulses:
-                if all_pulses['next']:
-                    response_data = self.otx_get(all_pulses['next'],
-                                                 proxies=proxies,
-                                                 verify=verify)
-
 
 def main():
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('-c', dest='config', default=None, help='Provide '
-                                                                   'a specific configuration file path.')
-    argparser.add_argument('-d', dest='days', default=None, type=int,
-                           help='Specify the max range of pulses grabbed '
-                                'in days. (days old)')
-    argparser.add_argument('--dev', dest='dev', action='store_true',
-                           default=False, help='Use dev options.')
+    argparser.add_argument('-c', dest='config', default=None, help='Provide ' 'a specific configuration file path.')
+    argparser.add_argument(
+        '-d', dest='days', default=None, type=int, help='Specify the max range of pulses grabbed ' 'in days. (days old)'
+    )
+    argparser.add_argument('--dev', dest='dev', action='store_true', default=False, help='Use dev options.')
     args = argparser.parse_args()
 
     siphon = OTX_Siphon(dev=args.dev, config=args.config, days=args.days)
