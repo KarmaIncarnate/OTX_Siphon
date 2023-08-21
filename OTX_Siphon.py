@@ -60,7 +60,7 @@ class OTX_Siphon(object):
             print('Pulse name: ' + event_title)
             print('Created: ' + created)
 
-            with open("output.csv", 'w', newline='') as resultFile:
+            with open("output.csv", 'w', newline='', encoding='utf-8') as resultFile:
                 for i in pulse['indicators']:
                     # Probably want to break this out so you can use add
                     # and/or write methods. Need to parse the indicator_data
